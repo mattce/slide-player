@@ -70,7 +70,7 @@
             this.video.style.position = 'absolute';
             this.video.style.height = this.video.style.width = '100%';
             this.video.style.top = this.video.style.left = '0px';
-            innerContainer.appendChild(video);
+            innerContainer.appendChild(this.video);
         };
 
         SlidePlayer.prototype.getVideoSource = function () {
