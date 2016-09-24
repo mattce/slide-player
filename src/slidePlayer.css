@@ -1,0 +1,29 @@
+.slide-player-root {
+
+}
+
+.slide-player-container {
+    height: 0;
+    position: relative;
+}
+
+.slide-player-catcher {
+
+}
+
+.slide-player-video {
+
+}
+
+.slide-player-catcher,
+.slide-player-video {
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.slide-player-hot-spot {
+    position: absolute;
+}

@@ -12,11 +12,12 @@
 
         function SlidePlayer() {
             console.log('SlidePlayer');
+
             var _this = this;
 
             this.config = window[configSlug];
             this.video = null;
-            this.container = document.querySelector('#slidePlayer');
+            this.root = this.getContainer();
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
 
             emitter.addEventListener(ns + 'utils/resize', function (e) {
@@ -34,22 +35,40 @@
             // console.log(data);
         };
 
+        SlidePlayer.prototype.getContainer = function () {
+            var rootSelector = this.config.rootSelector;
+            if (!rootSelector) {
+                throw new Error('Config\'s rootSelector must be set');
+            } else if (rootSelector.charAt(0) === '#') {
+                return document.querySelector(rootSelector);
+            } else if (rootSelector.charAt(0) === '.') {
+                return document.querySelectorAll(rootSelector)[0];
+            } else {
+                throw new Error('Config\'s rootSelector must be a class or id-selector');
+            }
+        };
+
         SlidePlayer.prototype.setupPlayerDomStructure = function () {
-            var innerContainer = document.createElement('div');
-            innerContainer.style.height = '0px';
-            innerContainer.style.position = 'relative';
-            innerContainer.style.paddingTop = Helpers.getAspectRatioAsPercent(this.config.aspectRatio);
-            this.container.appendChild(innerContainer);
+
+            this.root.className += 'slide-player-root';
+
+            var container = document.createElement('div');
+            container.className = 'slide-player-container';
+            container.style.paddingTop = Helpers.getAspectRatioAsPercent(this.config.aspectRatio);
+            this.root.appendChild(container);
+
+            var catcher = document.createElement('div');
+            catcher.className = 'slide-player-catcher';
+            container.appendChild(catcher);
 
             var video = document.createElement('video');
-            video.style.position = 'absolute';
-            video.style.height = video.style.width = '100%';
-            video.style.top = video.style.left = '0px';
+            video.className = 'slide-player-video';
             video.setAttribute('src', this.getVideoSource());
             if (this.config.debug) {
                 video.setAttribute('controls', 'true');
             }
-            this.video = VideoInstance.getInstance(innerContainer.appendChild(video));
+            video = container.appendChild(video);
+            this.video = VideoInstance.getInstance(video);
         };
 
         SlidePlayer.prototype.getVideoSource = function () {
@@ -84,6 +103,8 @@
             return this;
         }
 
+        Video.prototype.constructor = Video;
+
         Video.prototype.gotoAndPlay = function (start, end) {
             this.elem.play();
         };
@@ -92,6 +113,39 @@
             getInstance: function (param) {
                 if (!instance) {
                     instance = new Video(param);
+                }
+                return instance;
+            }
+        }
+
+    })();
+
+
+    // SCENE
+
+    var SceneInstance = (function () {
+        var instance = null;
+
+        function Scene(videoElement) {
+            console.log('Video');
+            this.elem = videoElement;
+            return this;
+        }
+
+        Scene.prototype.constructor = Scene;
+
+        Scene.prototype.fadeIn = function (start, end) {
+            this.elem.play();
+        };
+
+        Scene.prototype.fadeOut = function (start, end) {
+            this.elem.play();
+        };
+
+        return {
+            getInstance: function (param) {
+                if (!instance) {
+                    instance = new Scene(param);
                 }
                 return instance;
             }
@@ -110,6 +164,7 @@
             return this;
         }
 
+        Poster.prototype.constructor = Poster;
 
         Poster.prototype.posterReady = function (fn) {
             var scenes = window.spConfig.scenes,
@@ -121,7 +176,6 @@
                 img.src = scenes[index].poster + '?' + ns;
                 img.onload = function () {
                     index--;
-                    console.log(this);
                 };
             }
             Ticker.registerTask(id, function () {
@@ -151,7 +205,7 @@
         var instance = null;
 
         function BrowserUtils() {
-            console.log('Browser');
+            console.log('BrowserUtils');
             this.config = window[configSlug];
             this.lastBreakPoint = null;
             this.currentBreakPoint = 'N/A';
@@ -250,13 +304,11 @@
         var tickerCount = 0;
 
         function registerTask(id, task) {
-            // console.log('Ticker :: register task with id:', id);
             tasks[id] = task;
             startTicker();
         }
 
         function removeTask(id) {
-            // console.log('Ticker :: remove task with id:', id);
             delete tasks[id];
             if (Helpers.getObjectSize(tasks) === 0) {
                 stopTicker();
@@ -264,7 +316,6 @@
         }
 
         function tick() {
-            // console.log('Ticker :: tick ');
             for (var task in tasks) {
                 tasks[task](++tickerCount);
             }
@@ -272,12 +323,10 @@
         }
 
         function startTicker() {
-            // console.log('Ticker :: starting ticker');
             afId = requestAnimationFrame(tick);
         }
 
         function stopTicker() {
-            // console.log('Ticker :: stopping ticker');
             // setTimeout is needed because ´tick()´ would overpass ´cancelAnimationFrame()´ => endless loop
             setTimeout(function () {
                 window.cancelAnimationFrame(afId);
@@ -287,6 +336,21 @@
         return {
             registerTask: registerTask,
             removeTask: removeTask
+        }
+
+    })();
+
+
+    // ANIMATION
+
+    var Animation = (function () {
+
+        function animate(element, props, time, callback) {
+
+        }
+
+        return {
+            animate: animate
         }
 
     })();
@@ -363,6 +427,7 @@
 
     })();
 
+    // TODO : implement first sanity check if crucial information is present, then start loading video / posters
     Helpers.domReady(function () {
         PostersInstance.getInstance().posterReady(function () {
             SlidePlayerInstance.getInstance();
@@ -370,3 +435,28 @@
     });
 
 })(window, document);
+
+/*
+ [1]
+ scene initiates
+ show poster (with transition)
+ generate hotSpots (delayed transition one by one)
+
+ [2]
+ click on hotSpot with timeLine target
+ preLoading of target seeking point -> when ready
+ - hide poster
+ - hide hotSpots
+ - play on seeking point -> when finished playing : repeat [1]
+
+ [3]
+ click on hotSpot with selector target
+ - generate overlay container
+ - show catcher
+
+ [4]
+ click on overlay container close button or on catcher
+ - close overlay container
+ - hide catcher
+
+ */

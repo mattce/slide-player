@@ -1,6 +1,7 @@
 window.spConfig = {
     debug: true,
     useAnimation: true,
+    rootSelector: '#slidePlayer',
     aspectRatio: '16:9',
     breakPoints: {
         small: 0,
@@ -33,7 +34,6 @@ window.spConfig = {
     scenes: [
         {
             id: 'intro',
-            // poster: 'http://www.androidcentral.com/sites/androidcentral.com/files/styles/w550h500/public/wallpapers/blurry-lights-2to.jpg',
             poster: 'https://a2ua.com/blurry/blurry-005.jpg',
             enter: {
                 start: '00:00',
@@ -51,7 +51,13 @@ window.spConfig = {
                     height: '10%',
                     positionX: '5%',
                     positionY: '5%',
-                    customClass: 'custom-class'
+                    customClass: 'custom-class',
+                    container: {
+                        width: '15%',
+                        height: '15%',
+                        positionX: '5%',
+                        positionY: '5%'
+                    }
                 },
                 {
                     id: 'test-2',
@@ -59,11 +65,17 @@ window.spConfig = {
                     width: '10%',
                     height: '10%',
                     positionX: '80%',
-                    positionY: '20%'
+                    positionY: '20%',
+                    container: {
+                        width: '20%',
+                        height: '20%',
+                        positionX: '20%',
+                        positionY: '20%'
+                    }
                 },
                 {
                     id: 'test-3',
-                    action: 'zoom',
+                    action: 'nextStep',
                     width: '10%',
                     height: '10%',
                     positionX: '50%',
