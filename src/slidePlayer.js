@@ -1,6 +1,7 @@
 ;(function (window, document) {
 
     var configSlug = 'spConfig';
+    var breakPointClassPrefix = 'is-';
     var ns = 'sp_' + new Date().getTime() + '/';
     var emitter = document.body;
 
@@ -16,15 +17,26 @@
             var _this = this;
 
             this.config = window[configSlug];
-            this.video = null;
+            this.breakPointClasses = this.generateBreakPointClasses();
+
             this.root = this.getContainer();
+            this.container = null;
+            this.catcher = null;
+            this.poster = null;
+            this.video = null;
+            this.setupPlayerDomStructure();
+
+            this.lastScene = null;
+            this.currentScene = null;
+
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
+            this.Poster = PosterInstance.getInstance().setupDomStructure(this.poster);
+            this.Scene = SceneInstance.getInstance(this.config.scenes);
+            this.Catcher = CatcherInstance.getInstance(this.catcher);
 
             emitter.addEventListener(ns + 'utils/resize', function (e) {
                 _this.onResize(e.detail);
             }, false);
-
-            this.setupPlayerDomStructure();
 
             return this;
         }
@@ -32,51 +44,95 @@
         SlidePlayer.prototype.constructor = SlidePlayer;
 
         SlidePlayer.prototype.onResize = function (data) {
-            // console.log(data);
+            this.BrowserUtils.toggleClass(this.root, breakPointClassPrefix + data.breakPointData, this.breakPointClasses);
+        };
+
+        SlidePlayer.prototype.start = function () {
+            this.goToAndPlay(this.config.scenes[0]);
+
+            console.log(this);
+        };
+
+        SlidePlayer.prototype.goToAndPlay = function (scene) {
+            /*
+             var _this = this;
+             this.BrowserUtils.fadeOutElement(this.root, 2000, 200);
+
+             setTimeout(function () {
+             _this.BrowserUtils.fadeInElement(_this.root, 2000, 200);
+             }, 5000);
+             */
+            if (!this.lastScene) { // application just started
+                // this.Poster.showPoster(scene.id);
+                this.Scene.show(scene.hotSpots);
+            } else {
+
+            }
         };
 
         SlidePlayer.prototype.getContainer = function () {
             var rootSelector = this.config.rootSelector;
-            if (!rootSelector) {
-                throw new Error('Config\'s rootSelector must be set');
-            } else if (rootSelector.charAt(0) === '#') {
+            if (rootSelector.charAt(0) === '#') {
                 return document.querySelector(rootSelector);
             } else if (rootSelector.charAt(0) === '.') {
                 return document.querySelectorAll(rootSelector)[0];
-            } else {
-                throw new Error('Config\'s rootSelector must be a class or id-selector');
             }
         };
 
         SlidePlayer.prototype.setupPlayerDomStructure = function () {
 
+            var BrowserUtils = BrowserUtilsInstance.getInstance();
+
             this.root.className += 'slide-player-root';
 
-            var container = document.createElement('div');
-            container.className = 'slide-player-container';
-            container.style.paddingTop = Helpers.getAspectRatioAsPercent(this.config.aspectRatio);
-            this.root.appendChild(container);
+            this.container = BrowserUtils.createElement({
+                type: 'div',
+                className: 'slide-player-container',
+                styles: {
+                    paddingTop: Helpers.getAspectRatioAsPercent(this.config.aspectRatio)
+                }
+            });
+            this.root.appendChild(this.container);
 
-            var catcher = document.createElement('div');
-            catcher.className = 'slide-player-catcher';
-            container.appendChild(catcher);
+            this.catcher = BrowserUtils.createElement({
+                type: 'div',
+                className: 'slide-player-catcher'
+            });
+            // this.container.appendChild(this.catcher);
 
-            var video = document.createElement('video');
-            video.className = 'slide-player-video';
-            video.setAttribute('src', this.getVideoSource());
-            if (this.config.debug) {
-                video.setAttribute('controls', 'true');
-            }
-            video = container.appendChild(video);
+            this.poster = BrowserUtils.createElement({
+                type: 'div',
+                className: 'slide-player-poster'
+            });
+            this.container.appendChild(this.poster);
+
+            var video = BrowserUtils.createElement({
+                type: 'video',
+                className: 'slide-player-video',
+                attributes: {
+                    src: this.getVideoSource(),
+                    controls: this.config.debug ? 'true' : 'N/A'
+                },
+                styles: {
+                    opacity: 1
+                }
+            });
+            video = this.container.appendChild(video);
             this.video = VideoInstance.getInstance(video);
         };
 
-        SlidePlayer.prototype.getVideoSource = function () {
-            if (!~(Helpers.doesObjectExist(this.config.videoPaths))) {
-                throw new Error('No video paths defined in config!');
+        SlidePlayer.prototype.generateBreakPointClasses = function () {
+            var classes = [];
+            for (var breakpoint in this.config.breakPoints) {
+                classes.push(breakPointClassPrefix + breakpoint);
             }
-            var breakPointState = this.BrowserUtils.getBreakPointState();
-            var supportedMediaType = this.BrowserUtils.getSupportedMediaType();
+            return classes;
+        };
+
+        SlidePlayer.prototype.getVideoSource = function () {
+            var BrowserUtils = BrowserUtilsInstance.getInstance();
+            var breakPointState = BrowserUtilsInstance.getInstance().getBreakPointState();
+            var supportedMediaType = BrowserUtilsInstance.getInstance().getSupportedMediaType();
             return this.config.videoPaths[breakPointState][supportedMediaType];
         };
 
@@ -99,14 +155,44 @@
 
         function Video(videoElement) {
             console.log('Video');
+            var _this = this;
             this.elem = videoElement;
+            console.log(videoElement.seekable);
+
+            this.elem.addEventListener('canplaythrough', function () {
+                console.log('Video can play through', arguments);
+            });
+
+            this.elem.addEventListener('timeupdate', function () {
+                // console.log('Video timeupdate .:: currentTime = ', _this.elem.currentTime);
+            });
+
+            this.elem.addEventListener('playing', function () {
+                console.log('Video is playing', arguments);
+                Ticker.registerTask('asd', function () {
+                    console.log(_this.elem.currentTime);
+                    if (_this.elem.currentTime >= 2) {
+                        _this.elem.pause();
+                        Ticker.removeTask('asd');
+                    }
+                });
+            });
+
             return this;
         }
 
         Video.prototype.constructor = Video;
 
-        Video.prototype.gotoAndPlay = function (start, end) {
+        Video.prototype.playScene = function (sceneId, direction) {
             this.elem.play();
+        };
+
+        Video.prototype.seekAndPlay = function () {
+
+        };
+
+        Video.prototype.playTimeRange = function (start, end) {
+
         };
 
         return {
@@ -126,26 +212,29 @@
     var SceneInstance = (function () {
         var instance = null;
 
-        function Scene(videoElement) {
-            console.log('Video');
-            this.elem = videoElement;
+        function Scene(scenes) {
+            console.log('Scene');
+
+            this.scenes = scenes;
+            console.log(this.scenes);
+
             return this;
         }
 
         Scene.prototype.constructor = Scene;
 
-        Scene.prototype.fadeIn = function (start, end) {
-            this.elem.play();
+        Scene.prototype.show = function (sceneId) {
+
         };
 
-        Scene.prototype.fadeOut = function (start, end) {
-            this.elem.play();
+        Scene.prototype.hide = function (sceneId) {
+
         };
 
         return {
-            getInstance: function (param) {
+            getInstance: function (params) {
                 if (!instance) {
-                    instance = new Scene(param);
+                    instance = new Scene(params);
                 }
                 return instance;
             }
@@ -156,30 +245,54 @@
 
     // POSTER
 
-    var PostersInstance = (function () {
+    var PosterInstance = (function () {
         var instance = null;
 
         function Poster() {
             console.log('Poster');
+            this.root = null;
+            this.posters = [];
+            this.zIndex = 1;
+
+            this.BrowserUtils = BrowserUtilsInstance.getInstance();
+
             return this;
         }
 
         Poster.prototype.constructor = Poster;
 
         Poster.prototype.posterReady = function (fn) {
+            var _this = this;
+
             var scenes = window.spConfig.scenes,
-                index = 0,
-                length = scenes.length;
+                count = scenes.length;
+
             var id = Helpers.getUniqueId();
-            for (; index < length; index++) {
-                var img = new Image();
-                img.src = scenes[index].poster + '?' + ns;
+
+            scenes.forEach(function (value, index, array) {
+                var sceneId = scenes[index].id;
+                var img = _this.BrowserUtils.createElement({
+                    type: 'img',
+                    className: 'slide-player-poster-img slide-player-poster-img-' + sceneId,
+                    attributes: {
+                        src: scenes[index].poster + '?' + ns,
+                        'data-scene-id': sceneId
+                    },
+                    styles: {
+                        opacity: 0
+                    }
+                });
                 img.onload = function () {
-                    index--;
+                    count--;
+                    _this.posters.push({
+                        image: this,
+                        id: this.getAttribute('data-scene-id')
+                    });
                 };
-            }
+            });
+
             Ticker.registerTask(id, function () {
-                if (index === 0) {
+                if (count === 0) {
                     fn();
                     Ticker.removeTask(id);
                 }
@@ -187,10 +300,95 @@
 
         };
 
+        Poster.prototype.setupDomStructure = function (root) {
+            var _this = this;
+
+            this.root = root;
+            this.posters.forEach(function (value, index, array) {
+                _this.root.appendChild(value.image);
+            });
+
+            return this;
+        };
+
+        Poster.prototype.showPoster = function (id) {
+            var currentPoster = this.getPosterFromId(id);
+            this.BrowserUtils.setStylesOfElement(currentPoster, {zIndex: this.zIndex++});
+            this.BrowserUtils.fadeInElement(currentPoster);
+        };
+
+        Poster.prototype.hidePoster = function (id) {
+            var currentPoster = this.getPosterFromId(id);
+            this.BrowserUtils.fadeOutElement(currentPoster);
+        };
+
+        Poster.prototype.getPosterFromId = function (id) {
+            var poster = null;
+            this.posters.forEach(function (value, index, array) {
+                if (value.id === id) {
+                    poster = value.image;
+                }
+            });
+            return poster;
+        };
+
         return {
             getInstance: function (param) {
                 if (!instance) {
                     instance = new Poster(param);
+                }
+                return instance;
+            }
+        }
+
+    })();
+
+
+    // CATCHER
+
+    var CatcherInstance = (function () {
+        var instance = null;
+
+        function Catcher(parent) {
+            this.parent = parent;
+            this.root = null;
+
+            this.BrowserUtils = BrowserUtilsInstance.getInstance();
+
+            this.setupCatcherDomStructure();
+
+            return this;
+        }
+
+        Catcher.prototype.constructor = Catcher;
+
+        Catcher.prototype.setupCatcherDomStructure = function () {
+            this.root = this.BrowserUtils.createElement({
+                type: 'div',
+                className: 'slide-player-catcher'
+            });
+            this.parent.appendChild(this.root);
+            // this.hideCatcher();
+        };
+
+        Catcher.prototype.showCatcher = function (fn) {
+            this.BrowserUtils.setStylesOfElement(this.root, {display: 'block'});
+            this.root.addEventListener('click', this.onClick(fn));
+        };
+
+        Catcher.prototype.hideCatcher = function () {
+            this.BrowserUtils.setStylesOfElement(this.root, {display: 'none'});
+            this.root.removeEventListener('click', this.onClick, false);
+        };
+
+        Catcher.prototype.onClick = function (fn) {
+            fn();
+        };
+
+        return {
+            getInstance: function (param) {
+                if (!instance) {
+                    instance = new Catcher(param);
                 }
                 return instance;
             }
@@ -206,10 +404,13 @@
 
         function BrowserUtils() {
             console.log('BrowserUtils');
+
+            var _this = this;
+
             this.config = window[configSlug];
             this.lastBreakPoint = null;
             this.currentBreakPoint = 'N/A';
-            var _this = this;
+
             this.watchWindowSize();
             this.setBreakPointState();
 
@@ -233,8 +434,22 @@
             }, 300), false);
         };
 
+        BrowserUtils.prototype.createElement = function (params) {
+            if (!params.type) throw new Error('\'type\' must be set for \'BrowserUtils.createElement()\'');
+
+            var element = document.createElement(params.type);
+            element.className = params.className;
+            if (params.styles) {
+                this.setStylesOfElement(element, params.styles);
+            }
+            if (params.attributes) {
+                this.setAttributesOfElement(element, params.attributes);
+            }
+            return element;
+        };
+
         BrowserUtils.prototype.setBreakPointState = function () {
-            if (!~(Helpers.doesObjectExist(this.config.breakPoints))) {
+            if (Helpers.getObjectSize(this.config.breakPoints) < 1) {
                 console.warn('No breakPoints defined. Will use \'{small: 0}\' instead.');
                 this.config.breakPoints = {small: 0};
             }
@@ -280,6 +495,102 @@
                 throw new Error('Video Source needs to inherit one of the following codecs:\n["ogg", "h264", "webm", "vp9", "hls"]');
             } else {
                 throw new Error('Video Element doesn\'t work in your browser.')
+            }
+        };
+
+        BrowserUtils.prototype.fadeInElement = function (element, duration, delay, callback) {
+            var _this = this;
+            duration = duration || 300;
+            delay = delay || 0;
+            this.setStylesOfElement(element, {
+                opacity: 0,
+                display: 'block',
+                'transition-property': 'opacity',
+                'transition-duration': duration + 'ms',
+                'transition-delay': delay + 'ms'
+            });
+            setTimeout(function () {
+                _this.setStylesOfElement(element, {
+                    opacity: 1
+                });
+            }, 1);
+            setTimeout(function () {
+                !!callback ? callback() : '';
+            }, duration + delay);
+        };
+
+        BrowserUtils.prototype.fadeOutElement = function (element, duration, delay, callback) {
+            var _this = this;
+            duration = duration || 300;
+            delay = delay || 0;
+            this.setStylesOfElement(element, {
+                opacity: 0,
+                'transition-property': 'opacity',
+                'transition-duration': duration + 'ms',
+                'transition-delay': delay + 'ms'
+            });
+            setTimeout(function () {
+                _this.setStylesOfElement(element, {display: 'none'});
+                !!callback ? callback() : '';
+            }, duration + delay);
+        };
+
+        BrowserUtils.prototype.toggleClass = function (element, toggleClass, classSet) {
+            var _this = this;
+            if (!classSet) { // toggleClass should just be toggled
+                this[this.hasClass(element, toggleClass) ? 'removeClass' : 'addClass'](element, toggleClass);
+            }
+            if (classSet) { // toggleClass should replace class from classSet
+                var replacedClass = false;
+                classSet.forEach(function (value, index, array) {
+                    if (_this.hasClass(element, value)) {
+                        _this.replaceClass(element, value, toggleClass);
+                        replacedClass = true
+                    }
+                });
+                if (!replacedClass) { // in case classSet is set and 'toggleClass()' is invoked for first time
+                    this.addClass(element, toggleClass);
+                }
+            }
+        };
+
+        BrowserUtils.prototype.hasClass = function (element, className) {
+            return !!(element.className.match(this.getClassSelectorRegexp(className)));
+        };
+
+        BrowserUtils.prototype.replaceClass = function (element, oldClassName, newClassName) {
+            element.className = element.className.replace(this.getClassSelectorRegexp(oldClassName), ' ' + newClassName);
+        };
+
+        BrowserUtils.prototype.addClass = function (element, className) {
+            if (!(this.hasClass(element, className))) {
+                element.className += (' ' + className);
+            }
+        };
+
+        BrowserUtils.prototype.removeClass = function (element, className) {
+            if (this.hasClass(element, className)) {
+                this.replaceClass(element, className, '');
+            }
+        };
+
+        BrowserUtils.prototype.getClassSelectorRegexp = function (classSelector) {
+            return new RegExp('(?:^|\\s)' + classSelector + '(?!\\S)', 'g');
+        };
+
+        BrowserUtils.prototype.setStylesOfElement = function (element, styles) {
+            for (var style in styles) {
+                if (styles.hasOwnProperty(style)) {
+                    element.style[style] = styles[style];
+                }
+            }
+        };
+
+        BrowserUtils.prototype.setAttributesOfElement = function (element, attributes) {
+            for (var attribute in attributes) {
+                if (attributes.hasOwnProperty(attribute) && attributes[attribute] !== 'N/A') {
+                    element.setAttribute(attribute, attributes[attribute]);
+                }
             }
         };
 
@@ -334,23 +645,9 @@
         }
 
         return {
+            ticker: this,
             registerTask: registerTask,
             removeTask: removeTask
-        }
-
-    })();
-
-
-    // ANIMATION
-
-    var Animation = (function () {
-
-        function animate(element, props, time, callback) {
-
-        }
-
-        return {
-            animate: animate
         }
 
     })();
@@ -363,12 +660,25 @@
         var uniqueId = ~~(Math.random() * 1000);
 
         function domReady(fn) {
-            if (document.readyState === 'complete' && window.spConfig) {
-                fn();
-            } else {
-                setTimeout(function () {
-                    domReady(fn);
-                }, 9)
+            var id = Helpers.getUniqueId();
+            Ticker.registerTask(id, function () {
+                if (document.readyState === 'complete') {
+                    Ticker.removeTask(id);
+                    fn();
+                }
+            });
+        }
+
+        function sanitizeConfig(config) {
+            if (!config.rootSelector) {
+                throw new Error('Please add \'rootSelector\' as a property of ' + configSlug);
+            }
+            if (config.rootSelector.charAt(0) !== '.' && config.rootSelector.charAt(0) !== '#') {
+                throw new Error(configSlug + '\'s rootSelector must be a class or id-selector');
+            }
+            if (Helpers.getObjectSize(config.videoPaths) < 1) {
+                console.warn('No video paths defined in ' + configSlug + '. \'useAnimation\' will be set to \'false\'.');
+                config.useAnimation = false;
             }
         }
 
@@ -390,6 +700,7 @@
         }
 
         function getObjectSize(obj) {
+            if (!obj) return -1;
             var size = 0;
             for (var key in obj) {
                 if (obj.hasOwnProperty(key)) {
@@ -418,6 +729,7 @@
         return {
             domReady: domReady,
             debounce: debounce,
+            sanitizeConfig: sanitizeConfig,
             doesObjectExist: doesObjectExist,
             getObjectSize: getObjectSize,
             getUniqueId: getUniqueId,
@@ -427,10 +739,10 @@
 
     })();
 
-    // TODO : implement first sanity check if crucial information is present, then start loading video / posters
     Helpers.domReady(function () {
-        PostersInstance.getInstance().posterReady(function () {
-            SlidePlayerInstance.getInstance();
+        Helpers.sanitizeConfig(window[configSlug]);
+        PosterInstance.getInstance().posterReady(function () {
+            SlidePlayerInstance.getInstance().start();
         });
     });
 

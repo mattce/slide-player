@@ -66,6 +66,7 @@ window.spConfig = {
                     height: '10%',
                     positionX: '80%',
                     positionY: '20%',
+                    label: 'This is a label',
                     container: {
                         width: '20%',
                         height: '20%',
@@ -84,15 +85,19 @@ window.spConfig = {
             ]
         },
         {
+            id: 'scene1',
             poster: 'https://a2ua.com/blurry/blurry-004.jpg'
         },
         {
+            id: 'scene2',
             poster: 'https://a2ua.com/blurry/blurry-002.jpg'
         },
         {
+            id: 'scene3',
             poster: 'https://a2ua.com/blurry/blurry-003.jpg'
         },
         {
+            id: 'scene4',
             poster: 'https://a2ua.com/blurry/blurry-012.jpg'
         }
     ]
