@@ -1,18 +1,24 @@
 ;(function (window, document) {
 
+    var version = '0.0.6';
     var configSlug = 'spConfig';
     var breakPointClassPrefix = 'is-';
     var ns = 'sp_' + new Date().getTime() + '/';
     var emitter = document.body;
+    var config;
+    var currentScene;
 
 
     // SLIDE PLAYER
 
-    var SlidePlayerInstance = (function () {
+    var ApplicationInstance = (function () {
         var instance = null;
 
-        function SlidePlayer() {
-            console.log('SlidePlayer');
+        function Application() {
+            console.log('Application');
+
+            config = window[configSlug];
+            currentScene = config.scenes[0];
 
             var _this = this;
 
@@ -23,54 +29,30 @@
             this.container = null;
             this.catcher = null;
             this.poster = null;
-            this.video = null;
             this.setupPlayerDomStructure();
-
-            this.lastScene = null;
-            this.currentScene = null;
 
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
             this.Poster = PosterInstance.getInstance().setupDomStructure(this.poster);
-            this.Scene = SceneInstance.getInstance(this.config.scenes);
+            this.Scene = SceneInstance.getInstance(this.container);
             this.Catcher = CatcherInstance.getInstance(this.catcher);
+            this.Video = null;
 
             emitter.addEventListener(ns + 'utils/resize', function (e) {
                 _this.onResize(e.detail);
             }, false);
 
+            Helpers.dispatchCustomEvent('application/ready');
+
             return this;
         }
 
-        SlidePlayer.prototype.constructor = SlidePlayer;
+        Application.prototype.constructor = Application;
 
-        SlidePlayer.prototype.onResize = function (data) {
+        Application.prototype.onResize = function (data) {
             this.BrowserUtils.toggleClass(this.root, breakPointClassPrefix + data.breakPointData, this.breakPointClasses);
         };
 
-        SlidePlayer.prototype.start = function () {
-            this.goToAndPlay(this.config.scenes[0]);
-
-            console.log(this);
-        };
-
-        SlidePlayer.prototype.goToAndPlay = function (scene) {
-            /*
-             var _this = this;
-             this.BrowserUtils.fadeOutElement(this.root, 2000, 200);
-
-             setTimeout(function () {
-             _this.BrowserUtils.fadeInElement(_this.root, 2000, 200);
-             }, 5000);
-             */
-            if (!this.lastScene) { // application just started
-                // this.Poster.showPoster(scene.id);
-                this.Scene.show(scene.hotSpots);
-            } else {
-
-            }
-        };
-
-        SlidePlayer.prototype.getContainer = function () {
+        Application.prototype.getContainer = function () {
             var rootSelector = this.config.rootSelector;
             if (rootSelector.charAt(0) === '#') {
                 return document.querySelector(rootSelector);
@@ -79,7 +61,7 @@
             }
         };
 
-        SlidePlayer.prototype.setupPlayerDomStructure = function () {
+        Application.prototype.setupPlayerDomStructure = function () {
 
             var BrowserUtils = BrowserUtilsInstance.getInstance();
 
@@ -98,7 +80,7 @@
                 type: 'div',
                 className: 'slide-player-catcher'
             });
-            // this.container.appendChild(this.catcher);
+            this.container.appendChild(this.catcher);
 
             this.poster = BrowserUtils.createElement({
                 type: 'div',
@@ -118,10 +100,13 @@
                 }
             });
             video = this.container.appendChild(video);
-            this.video = VideoInstance.getInstance(video);
+            this.Video = VideoInstance.getInstance(video);
+
+            this.Video.startTimeRange(this.config.scenes[0], 'enter');
+
         };
 
-        SlidePlayer.prototype.generateBreakPointClasses = function () {
+        Application.prototype.generateBreakPointClasses = function () {
             var classes = [];
             for (var breakpoint in this.config.breakPoints) {
                 classes.push(breakPointClassPrefix + breakpoint);
@@ -129,7 +114,7 @@
             return classes;
         };
 
-        SlidePlayer.prototype.getVideoSource = function () {
+        Application.prototype.getVideoSource = function () {
             var BrowserUtils = BrowserUtilsInstance.getInstance();
             var breakPointState = BrowserUtilsInstance.getInstance().getBreakPointState();
             var supportedMediaType = BrowserUtilsInstance.getInstance().getSupportedMediaType();
@@ -139,7 +124,7 @@
         return {
             getInstance: function () {
                 if (!instance) {
-                    instance = new SlidePlayer();
+                    instance = new Application();
                 }
                 return instance;
             }
@@ -155,27 +140,16 @@
 
         function Video(videoElement) {
             console.log('Video');
+
             var _this = this;
+
+            this.scenes = window[configSlug].scenes;
             this.elem = videoElement;
-            console.log(videoElement.seekable);
+            this.isReadyToPlay = false;
 
             this.elem.addEventListener('canplaythrough', function () {
-                console.log('Video can play through', arguments);
-            });
-
-            this.elem.addEventListener('timeupdate', function () {
-                // console.log('Video timeupdate .:: currentTime = ', _this.elem.currentTime);
-            });
-
-            this.elem.addEventListener('playing', function () {
-                console.log('Video is playing', arguments);
-                Ticker.registerTask('asd', function () {
-                    console.log(_this.elem.currentTime);
-                    if (_this.elem.currentTime >= 2) {
-                        _this.elem.pause();
-                        Ticker.removeTask('asd');
-                    }
-                });
+                console.log('canplaythrough Event here');
+                _this.isReadyToPlay = true;
             });
 
             return this;
@@ -183,16 +157,55 @@
 
         Video.prototype.constructor = Video;
 
-        Video.prototype.playScene = function (sceneId, direction) {
-            this.elem.play();
+        Video.prototype.startTimeRange = function (scene, direction) {
+            var _this = this;
+            var startTime = this.convertTimeStamp(scene[direction].start, true);
+            var endTime = this.convertTimeStamp(scene[direction].end, false);
+
+            if (startTime >= endTime) {
+                throw new Error('"start" can\'t be bigger than "end" in ' + scene.id + '.' + scene.direction);
+            }
+
+            this.elem.currentTime = startTime;
+
+            this.processLoading(function () {
+                _this.elem.play();
+                _this.stopTimeRange(endTime);
+            });
         };
 
-        Video.prototype.seekAndPlay = function () {
-
+        Video.prototype.stopTimeRange = function (endTime) {
+            var _this = this;
+            var id = Helpers.getUniqueId();
+            Ticker.registerTask(id, function () {
+                if (_this.elem.currentTime >= endTime) {
+                    _this.elem.pause();
+                    Ticker.removeTask(id);
+                }
+            })
         };
 
-        Video.prototype.playTimeRange = function (start, end) {
+        Video.prototype.processLoading = function (callback) {
+            this.isReadyToPlay = false;
+            var _this = this;
+            var id = Helpers.getUniqueId();
+            Ticker.registerTask(id, function () {
+                if (_this.isReadyToPlay) {
+                    callback();
+                    Ticker.removeTask(id);
+                }
+            });
+        };
 
+        Video.prototype.convertTimeStamp = function (time, forceBuffer) { // 00:00:000
+            var timeFragments = time.split(':');
+            var minutes = timeFragments[0] * 60;
+            var seconds = timeFragments[1];
+            var milliseconds = timeFragments[2];
+            if (forceBuffer) { // a simple way to force buffering => 'canplaythrough' event
+                milliseconds = (((milliseconds.charAt(0) * 1) + 5) % 10) + milliseconds.substr(1);
+            }
+            return ((minutes + seconds) + '.' + milliseconds) * 1;
         };
 
         return {
@@ -212,23 +225,39 @@
     var SceneInstance = (function () {
         var instance = null;
 
-        function Scene(scenes) {
+        function Scene(root) {
             console.log('Scene');
+            var _this = this;
 
-            this.scenes = scenes;
-            console.log(this.scenes);
+            this.root = root;
+            this.hotSpots = [];
+
+            this.BrowserUtils = BrowserUtilsInstance.getInstance();
+
+            Helpers.addEventListener('application/ready', function () {
+                _this.createHotSpots();
+            });
+
+            emitter.addEventListener(ns + 'cover/in', function (e) {
+                // _this.onApplicationReady(e.detail);
+            }, false);
 
             return this;
         }
 
         Scene.prototype.constructor = Scene;
 
-        Scene.prototype.show = function (sceneId) {
-
+        Scene.prototype.createHotSpots = function () {
+            var _this = this;
+            currentScene.hotSpots.forEach(function (hotSpot, index) {
+                var asd = HotSpotInstance.getNewInstance(_this.root, hotSpot, index).create();
+                _this.hotSpots.push(asd);
+            });
+            // show current scenes's hot-spots
         };
 
-        Scene.prototype.hide = function (sceneId) {
-
+        Scene.prototype.removeHotSpots = function () {
+            // hide current hot-spots (scene independent)
         };
 
         return {
@@ -237,6 +266,58 @@
                     instance = new Scene(params);
                 }
                 return instance;
+            }
+        }
+
+    })();
+
+
+    // HOT-SPOT
+
+    var HotSpotInstance = (function () {
+
+        function HotSpot(root, data, index, onFadeIn, onFadeOut) {
+            this.root = root;
+            this.data = data;
+            this.index = index;
+            this.onFadeIn = onFadeIn;
+            this.onFadeOut = onFadeOut;
+            this.element = null;
+            this.BrowserUtils = BrowserUtilsInstance.getInstance();
+
+            return this;
+        }
+
+        HotSpot.prototype.create = function () {
+            this.element = this.BrowserUtils.createElement({
+                type: 'div',
+                className: 'slide-player-hot-spot slide-player-hot-spot__' + currentScene.id + '-' + this.index,
+                styles: {
+                    opacity: 0,
+                    width: this.data.width,
+                    height: this.data.height,
+                    left: this.data.positionX,
+                    top: this.data.positionY,
+                    'transition-delay': 300 * this.index + 'ms'
+                }
+            });
+            this.root.appendChild(this.element);
+            this.BrowserUtils.fadeInElement(this.element, 500, (this.index * 300), function(){
+                this.onFadeIn();
+            });
+            return this;
+        };
+
+        HotSpot.prototype.remove = function () {//element, duration, delay, callback
+            this.BrowserUtils.fadeOutElement(this.element, 500, (this.index * 300), function(){
+                this.onFadeOut();
+                this.parentElement.removeChild(this);
+            });
+        };
+
+        return {
+            getNewInstance: function (root, data, index) {
+                return new HotSpot(root, data, index);
             }
         }
 
@@ -482,9 +563,7 @@
                 types = {
                     ogg: 'video/ogg; codecs="theora"',
                     h264: 'video/mp4; codecs="avc1.42E01E"',
-                    webm: 'video/webm; codecs="vp8, vorbis"',
-                    vp9: 'video/webm; codecs="vp9"',
-                    hls: 'application/x-mpegURL; codecs="avc1.42E01E"'
+                    webm: 'video/webm; codecs="vp8, vorbis"'
                 };
             if (!!elem.canPlayType) {
                 for (var type in types) {
@@ -492,7 +571,7 @@
                         return type;
                     }
                 }
-                throw new Error('Video Source needs to inherit one of the following codecs:\n["ogg", "h264", "webm", "vp9", "hls"]');
+                throw new Error('Video Source needs to inherit one of the following codecs:\n["ogg", "h264", "webm"]');
             } else {
                 throw new Error('Video Element doesn\'t work in your browser.')
             }
@@ -645,7 +724,6 @@
         }
 
         return {
-            ticker: this,
             registerTask: registerTask,
             removeTask: removeTask
         }
@@ -671,10 +749,10 @@
 
         function sanitizeConfig(config) {
             if (!config.rootSelector) {
-                throw new Error('Please add \'rootSelector\' as a property of ' + configSlug);
+                throw new Error('Please add \'rootSelector\' as a property of window.' + configSlug);
             }
             if (config.rootSelector.charAt(0) !== '.' && config.rootSelector.charAt(0) !== '#') {
-                throw new Error(configSlug + '\'s rootSelector must be a class or id-selector');
+                throw new Error('window.' + configSlug + '\'s rootSelector must be a class or id-selector');
             }
             if (Helpers.getObjectSize(config.videoPaths) < 1) {
                 console.warn('No video paths defined in ' + configSlug + '. \'useAnimation\' will be set to \'false\'.');
@@ -711,10 +789,26 @@
         }
 
         function getUniqueId() {
-            return ++uniqueId + '';
+            return 'uid_' + ++uniqueId;
+        }
+
+        function getSceneById(id) {
+            var scene = {};
+            config.scenes.forEach(function(value, index, array) {
+                scene = value.id === id ? value : '';
+            });
+            return scene;
+        }
+
+        function addEventListener(eventName, callback) {
+            console.log('addEventListener :: eventName = ', eventName);
+            emitter.addEventListener(ns + eventName, function (event) {
+                callback(event, event.detail);
+            }, false);
         }
 
         function dispatchCustomEvent(eventName, data) {
+            console.log('dispatchCustomEvent :: eventName = ', eventName);
             emitter.dispatchEvent(new CustomEvent(ns + eventName, {detail: data}));
         }
 
@@ -733,6 +827,8 @@
             doesObjectExist: doesObjectExist,
             getObjectSize: getObjectSize,
             getUniqueId: getUniqueId,
+            getSceneById: getSceneById,
+            addEventListener: addEventListener,
             dispatchCustomEvent: dispatchCustomEvent,
             getAspectRatioAsPercent: getAspectRatioAsPercent
         }
@@ -742,33 +838,8 @@
     Helpers.domReady(function () {
         Helpers.sanitizeConfig(window[configSlug]);
         PosterInstance.getInstance().posterReady(function () {
-            SlidePlayerInstance.getInstance().start();
+            ApplicationInstance.getInstance().start();
         });
     });
 
 })(window, document);
-
-/*
- [1]
- scene initiates
- show poster (with transition)
- generate hotSpots (delayed transition one by one)
-
- [2]
- click on hotSpot with timeLine target
- preLoading of target seeking point -> when ready
- - hide poster
- - hide hotSpots
- - play on seeking point -> when finished playing : repeat [1]
-
- [3]
- click on hotSpot with selector target
- - generate overlay container
- - show catcher
-
- [4]
- click on overlay container close button or on catcher
- - close overlay container
- - hide catcher
-
- */

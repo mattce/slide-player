@@ -12,23 +12,17 @@ window.spConfig = {
         small: {
             ogg: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.ogv',
             h264: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.mp4',
-            webm: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm',
-            vp9: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm',
-            hls: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm'
+            webm: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm'
         },
         medium: {
             ogg: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.ogv',
             h264: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.mp4',
-            webm: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm',
-            vp9: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm',
-            hls: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm'
+            webm: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm'
         },
         large: {
             ogg: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.ogv',
             h264: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.mp4',
-            webm: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm',
-            vp9: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm',
-            hls: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm'
+            webm: 'http://clips.vorwaerts-gmbh.de/big_buck_bunny.webm'
         }
     },
     scenes: [
@@ -36,12 +30,12 @@ window.spConfig = {
             id: 'intro',
             poster: 'https://a2ua.com/blurry/blurry-005.jpg',
             enter: {
-                start: '00:00',
-                end: '00:02'
+                start: '00:05:000',
+                end: '00:14:000'
             },
             exit: {
-                start: '00:10',
-                end: '00:12'
+                start: '00:10:000',
+                end: '00:12:000'
             },
             hotSpots: [
                 {

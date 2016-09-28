@@ -40,7 +40,11 @@
 }
 
 .slide-player-hot-spot {
+    opacity: 0;
     position: absolute;
+    /*transition: 500ms opacity;*/
+    border: solid 10px red;
+    z-index: 999;
 }
 
 .slide-player-poster-img {
