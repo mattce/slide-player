@@ -1,6 +1,7 @@
 ;(function (window, document) {
 
-    var version = '0.0.6';
+    var version = '0.0.7';
+    // TODO : put into global '__' object
     var configSlug = 'spConfig';
     var breakPointClassPrefix = 'is-';
     var ns = 'sp_' + new Date().getTime() + '/';
@@ -9,7 +10,7 @@
     var currentScene;
 
 
-    // SLIDE PLAYER
+    // APPLICATION
 
     var ApplicationInstance = (function () {
         var instance = null;
@@ -25,19 +26,19 @@
             this.config = window[configSlug];
             this.breakPointClasses = this.generateBreakPointClasses();
 
-            this.root = this.getContainer();
+            this.root = document.querySelector(this.config.rootSelector);
             this.container = null;
-            this.catcher = null;
             this.poster = null;
-            this.setupPlayerDomStructure();
 
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
-            this.Poster = PosterInstance.getInstance().setupDomStructure(this.poster);
-            this.Scene = SceneInstance.getInstance(this.container);
-            this.Catcher = CatcherInstance.getInstance(this.catcher);
-            this.Video = null;
 
-            emitter.addEventListener(ns + 'utils/resize', function (e) {
+            this.setupPlayerDomStructure();
+
+            PosterInstance.getInstance().init(this.poster);
+            SceneInstance.getInstance(this.container);
+            CatcherInstance.getInstance(this.container);
+
+            Helpers.addEventListener('utils/resize', function (e) {
                 _this.onResize(e.detail);
             }, false);
 
@@ -50,15 +51,6 @@
 
         Application.prototype.onResize = function (data) {
             this.BrowserUtils.toggleClass(this.root, breakPointClassPrefix + data.breakPointData, this.breakPointClasses);
-        };
-
-        Application.prototype.getContainer = function () {
-            var rootSelector = this.config.rootSelector;
-            if (rootSelector.charAt(0) === '#') {
-                return document.querySelector(rootSelector);
-            } else if (rootSelector.charAt(0) === '.') {
-                return document.querySelectorAll(rootSelector)[0];
-            }
         };
 
         Application.prototype.setupPlayerDomStructure = function () {
@@ -75,12 +67,6 @@
                 }
             });
             this.root.appendChild(this.container);
-
-            this.catcher = BrowserUtils.createElement({
-                type: 'div',
-                className: 'slide-player-catcher'
-            });
-            this.container.appendChild(this.catcher);
 
             this.poster = BrowserUtils.createElement({
                 type: 'div',
@@ -100,9 +86,7 @@
                 }
             });
             video = this.container.appendChild(video);
-            this.Video = VideoInstance.getInstance(video);
-
-            this.Video.startTimeRange(this.config.scenes[0], 'enter');
+            VideoInstance.getInstance(video);
 
         };
 
@@ -115,9 +99,8 @@
         };
 
         Application.prototype.getVideoSource = function () {
-            var BrowserUtils = BrowserUtilsInstance.getInstance();
-            var breakPointState = BrowserUtilsInstance.getInstance().getBreakPointState();
-            var supportedMediaType = BrowserUtilsInstance.getInstance().getSupportedMediaType();
+            var breakPointState = this.BrowserUtils.getBreakPointState();
+            var supportedMediaType = this.BrowserUtils.getSupportedMediaType();
             return this.config.videoPaths[breakPointState][supportedMediaType];
         };
 
@@ -179,8 +162,8 @@
             var id = Helpers.getUniqueId();
             Ticker.registerTask(id, function () {
                 if (_this.elem.currentTime >= endTime) {
-                    _this.elem.pause();
                     Ticker.removeTask(id);
+                    _this.elem.pause();
                 }
             })
         };
@@ -191,8 +174,8 @@
             var id = Helpers.getUniqueId();
             Ticker.registerTask(id, function () {
                 if (_this.isReadyToPlay) {
-                    callback();
                     Ticker.removeTask(id);
+                    callback();
                 }
             });
         };
@@ -231,16 +214,13 @@
 
             this.root = root;
             this.hotSpots = [];
+            this.activeHotSpots = 0;
 
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
 
-            Helpers.addEventListener('application/ready', function () {
+            Helpers.addEventListener('poster/ready', function () {
                 _this.createHotSpots();
             });
-
-            emitter.addEventListener(ns + 'cover/in', function (e) {
-                // _this.onApplicationReady(e.detail);
-            }, false);
 
             return this;
         }
@@ -249,15 +229,41 @@
 
         Scene.prototype.createHotSpots = function () {
             var _this = this;
-            currentScene.hotSpots.forEach(function (hotSpot, index) {
-                var asd = HotSpotInstance.getNewInstance(_this.root, hotSpot, index).create();
-                _this.hotSpots.push(asd);
-            });
-            // show current scenes's hot-spots
+            var id = Helpers.getUniqueId();
+            for (var i = 0, l = currentScene.hotSpots.length; i < l; i++) {
+                _this.hotSpots[i] = HotSpotInstance.getNewInstance({
+                    root: _this.root,
+                    data: currentScene.hotSpots[i],
+                    index: i,
+                    onFadeIn: function () {
+                        _this.activeHotSpots++;
+                    },
+                    onFadeOut: function () {
+                        _this.activeHotSpots--;
+                    }
+                });
+            }
+            Ticker.registerTask(id, function () {
+                if (currentScene.hotSpots.length === _this.activeHotSpots) {
+                    Ticker.removeTask(id);
+                    Helpers.dispatchCustomEvent('scene/ready');
+                }
+            })
         };
 
         Scene.prototype.removeHotSpots = function () {
-            // hide current hot-spots (scene independent)
+            var _this = this;
+            var id = Helpers.getUniqueId();
+            for (var i = 0, l = this.hotSpots.length; i < l; i++) {
+                this.hotSpots[i].remove();
+                delete this.hotSpots[i];
+            }
+            Ticker.registerTask(id, function () {
+                if (_this.activeHotSpots === 0) {
+                    Ticker.removeTask(id);
+                    Helpers.dispatchCustomEvent('scene/out');
+                }
+            })
         };
 
         return {
@@ -276,149 +282,161 @@
 
     var HotSpotInstance = (function () {
 
-        function HotSpot(root, data, index, onFadeIn, onFadeOut) {
-            this.root = root;
-            this.data = data;
-            this.index = index;
-            this.onFadeIn = onFadeIn;
-            this.onFadeOut = onFadeOut;
+        function HotSpot(params) {
+            this.root = params.root;
+            this.data = params.data;
+            this.index = params.index;
+            this.onFadeIn = params.onFadeIn;
+            this.onFadeOut = params.onFadeOut;
             this.element = null;
+
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
+
+            this.init();
 
             return this;
         }
 
-        HotSpot.prototype.create = function () {
+        HotSpot.prototype.init = function () {
+            var _this = this;
             this.element = this.BrowserUtils.createElement({
                 type: 'div',
-                className: 'slide-player-hot-spot slide-player-hot-spot__' + currentScene.id + '-' + this.index,
+                className: 'slide-player-hot-spot slide-player-hot-spot__' + currentScene.id + ' slide-player-hot-spot__' + currentScene.id + '-' + this.index,
                 styles: {
                     opacity: 0,
                     width: this.data.width,
                     height: this.data.height,
                     left: this.data.positionX,
-                    top: this.data.positionY,
-                    'transition-delay': 300 * this.index + 'ms'
+                    top: this.data.positionY
                 }
             });
+
+            this.element.addEventListener('click', function () {
+                _this.determineAction();
+            }, false);
+
             this.root.appendChild(this.element);
-            this.BrowserUtils.fadeInElement(this.element, 500, (this.index * 300), function(){
-                this.onFadeIn();
+
+            this.BrowserUtils.fadeInElement({
+                element: this.element,
+                duration: 400,
+                delay: this.index * 150,
+                callback: function () {
+                    console.log('HotSpot-' + _this.index + ' :: ready');
+                    _this.onFadeIn();
+                }
             });
+
             return this;
         };
 
-        HotSpot.prototype.remove = function () {//element, duration, delay, callback
-            this.BrowserUtils.fadeOutElement(this.element, 500, (this.index * 300), function(){
-                this.onFadeOut();
-                this.parentElement.removeChild(this);
+        HotSpot.prototype.remove = function () {
+            var _this = this;
+            this.BrowserUtils.fadeOutElement({
+                element: this.element,
+                delay: (this.index * 150),
+                callback: function () {
+                    _this.onFadeOut();
+                    _this.element.parentElement.removeChild(_this.element);
+                }
             });
         };
 
+        HotSpot.prototype.determineAction = function () {
+            if (this.data.action.charAt(0) === '.' || this.data.action.charAt(0) === '#') {
+                console.log('HotSpot :: determineAction -> showOverlay');
+                this.showOverlay(this.root, this.data.action, this.data.overlay);
+            } else {
+                console.log('HotSpot :: determineAction -> playVideo');
+                Helpers.dispatchCustomEvent('application/leave-scene');
+                // hot-spots weg
+                // poster weg
+            }
+        };
+
+        HotSpot.prototype.showOverlay = function (root, action, data) {
+            OverlayInstance.getNewOverlayInstance(root, action, data).show();
+        };
+
         return {
-            getNewInstance: function (root, data, index) {
-                return new HotSpot(root, data, index);
+            getNewInstance: function (params) {
+                return new HotSpot(params);
             }
         }
 
     })();
 
 
-    // POSTER
+    // OVERLAY
 
-    var PosterInstance = (function () {
-        var instance = null;
+    var OverlayInstance = (function () {
 
-        function Poster() {
-            console.log('Poster');
-            this.root = null;
-            this.posters = [];
-            this.zIndex = 1;
+        function Overlay(root, action, data) {
+            console.log('Overlay');
+            this.root = root;
+            this.action = action;
+            this.data = data;
+
+            this.element = null;
+            this.close = null;
 
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
+            this.Catcher = CatcherInstance.getInstance();
+
+            this.init();
 
             return this;
         }
 
-        Poster.prototype.constructor = Poster;
-
-        Poster.prototype.posterReady = function (fn) {
+        Overlay.prototype.init = function () {
             var _this = this;
 
-            var scenes = window.spConfig.scenes,
-                count = scenes.length;
-
-            var id = Helpers.getUniqueId();
-
-            scenes.forEach(function (value, index, array) {
-                var sceneId = scenes[index].id;
-                var img = _this.BrowserUtils.createElement({
-                    type: 'img',
-                    className: 'slide-player-poster-img slide-player-poster-img-' + sceneId,
-                    attributes: {
-                        src: scenes[index].poster + '?' + ns,
-                        'data-scene-id': sceneId
-                    },
-                    styles: {
-                        opacity: 0
-                    }
-                });
-                img.onload = function () {
-                    count--;
-                    _this.posters.push({
-                        image: this,
-                        id: this.getAttribute('data-scene-id')
-                    });
-                };
-            });
-
-            Ticker.registerTask(id, function () {
-                if (count === 0) {
-                    fn();
-                    Ticker.removeTask(id);
+            this.element = this.BrowserUtils.createElement({
+                type: 'div',
+                className: 'slide-player-overlay',
+                styles: {
+                    opacity: 0,
+                    width: this.data.width,
+                    height: this.data.height,
+                    left: this.data.positionX,
+                    top: this.data.positionY
                 }
             });
 
-        };
-
-        Poster.prototype.setupDomStructure = function (root) {
-            var _this = this;
-
-            this.root = root;
-            this.posters.forEach(function (value, index, array) {
-                _this.root.appendChild(value.image);
+            this.close = this.BrowserUtils.createElement({
+                type: 'a',
+                className: 'slide-player-overlay-close'
             });
 
-            return this;
+            this.root.appendChild(this.element);
+            this.element.appendChild(this.close);
+
+            this.close.addEventListener('click', function () {
+                _this.hide();
+            }, false);
+
         };
 
-        Poster.prototype.showPoster = function (id) {
-            var currentPoster = this.getPosterFromId(id);
-            this.BrowserUtils.setStylesOfElement(currentPoster, {zIndex: this.zIndex++});
-            this.BrowserUtils.fadeInElement(currentPoster);
+        Overlay.prototype.show = function () {
+            this.Catcher.show(this.hide);
+            this.BrowserUtils.fadeInElement({
+                element: this.element,
+                duration: 400,
+                delay: this.index * 150
+            })
         };
 
-        Poster.prototype.hidePoster = function (id) {
-            var currentPoster = this.getPosterFromId(id);
-            this.BrowserUtils.fadeOutElement(currentPoster);
-        };
-
-        Poster.prototype.getPosterFromId = function (id) {
-            var poster = null;
-            this.posters.forEach(function (value, index, array) {
-                if (value.id === id) {
-                    poster = value.image;
-                }
+        Overlay.prototype.hide = function () {
+            console.log(this);
+            this.BrowserUtils.fadeOutElement({
+                element: this.element,
+                delay: this.index * 150
             });
-            return poster;
         };
 
         return {
-            getInstance: function (param) {
-                if (!instance) {
-                    instance = new Poster(param);
-                }
-                return instance;
+            getNewOverlayInstance: function (root, action, data) {
+                return new Overlay(root, action, data);
             }
         }
 
@@ -436,40 +454,157 @@
 
             this.BrowserUtils = BrowserUtilsInstance.getInstance();
 
-            this.setupCatcherDomStructure();
+            this.init();
 
             return this;
         }
 
         Catcher.prototype.constructor = Catcher;
 
-        Catcher.prototype.setupCatcherDomStructure = function () {
+        Catcher.prototype.init = function () {
             this.root = this.BrowserUtils.createElement({
                 type: 'div',
                 className: 'slide-player-catcher'
             });
             this.parent.appendChild(this.root);
-            // this.hideCatcher();
         };
 
-        Catcher.prototype.showCatcher = function (fn) {
-            this.BrowserUtils.setStylesOfElement(this.root, {display: 'block'});
-            this.root.addEventListener('click', this.onClick(fn));
+        Catcher.prototype.show = function (callback) {
+            this.root.callback = callback;
+            this.root.addEventListener('click', this.onClick, false);
+            this.BrowserUtils.addClass(this.root, 'is-active');
         };
 
-        Catcher.prototype.hideCatcher = function () {
-            this.BrowserUtils.setStylesOfElement(this.root, {display: 'none'});
+        Catcher.prototype.hide = function () {
             this.root.removeEventListener('click', this.onClick, false);
+            this.BrowserUtils.removeClass(this.root, 'is-active');
         };
 
-        Catcher.prototype.onClick = function (fn) {
-            fn();
+        Catcher.prototype.onClick = function (evt) {
+            evt.target.callback.call(this);
         };
 
         return {
-            getInstance: function (param) {
+            getInstance: function (parent) {
                 if (!instance) {
-                    instance = new Catcher(param);
+                    instance = new Catcher(parent);
+                }
+                return instance;
+            }
+        }
+
+    })();
+
+
+    // POSTER
+
+    var PosterInstance = (function () {
+        var instance = null;
+
+        function Poster() {
+            console.log('Poster');
+
+            var _this = this;
+
+            this.root = null;
+            this.currentPoster = null;
+            this.posters = [];
+            this.zIndex = 1;
+
+            this.BrowserUtils = BrowserUtilsInstance.getInstance();
+
+            Helpers.addEventListener('application/ready', function () {
+                _this.showPoster();
+            });
+
+            Helpers.addEventListener('application/leave-scene', function () {
+                _this.hidePoster();
+            });
+
+            this.init();
+
+            return this;
+        }
+
+        Poster.prototype.constructor = Poster;
+
+        Poster.prototype.init = function (root) {
+            this.root = root;
+
+            for (var i = 0, l = this.posters.length; i < l; i++) {
+                this.root.appendChild(this.posters[i].poster);
+            }
+        };
+
+        Poster.prototype.posterReady = function (fn) {
+            var _this = this;
+
+            var scenes = window.spConfig.scenes;
+            var count = scenes.length;
+
+            var id = Helpers.getUniqueId();
+
+            for (var i = 0, l = scenes.length; i < l; i++) {
+                var sceneId = scenes[i].id;
+                var img = this.BrowserUtils.createElement({
+                    type: 'img',
+                    className: 'slide-player-poster-img slide-player-poster-img-' + sceneId,
+                    attributes: {
+                        src: scenes[i].poster + '?' + ns,
+                        'data-scene-id': sceneId
+                    },
+                    styles: {
+                        opacity: 0
+                    }
+                });
+                img.onload = function () {
+                    _this.posters.push({
+                        poster: this,
+                        id: this.getAttribute('data-scene-id')
+                    });
+                    count = count - 1;
+                };
+            }
+
+            Ticker.registerTask(id, function () {
+                if (count === 0) {
+                    Ticker.removeTask(id);
+                    fn();
+                }
+            });
+
+        };
+
+        Poster.prototype.showPoster = function () {
+            this.currentPoster = this.getPosterFromId(currentScene.id);
+            this.BrowserUtils.setStylesOfElement(this.currentPoster, {zIndex: this.zIndex++});
+            this.BrowserUtils.fadeInElement({
+                element: this.currentPoster,
+                callback: function () {
+                    Helpers.dispatchCustomEvent('poster/ready');
+                }
+            });
+        };
+
+        Poster.prototype.hidePoster = function () {
+            this.BrowserUtils.fadeOutElement({element: this.currentPoster});
+        };
+
+        Poster.prototype.getPosterFromId = function (id) {
+            var poster = null;
+            for (var i = 0, l = this.posters.length; i < l; i++) {
+                if (this.posters[i].id === id) {
+                    poster = this.posters[i].poster;
+                    break;
+                }
+            }
+            return poster;
+        };
+
+        return {
+            getInstance: function (root) {
+                if (!instance) {
+                    instance = new Poster(root);
                 }
                 return instance;
             }
@@ -495,10 +630,9 @@
             this.watchWindowSize();
             this.setBreakPointState();
 
-            // dispatching the event without a delay isn't captured
-            setTimeout(function () {
+            Helpers.addEventListener('application/ready', function () {
                 Helpers.dispatchCustomEvent('utils/resize', {breakPointData: _this.getBreakPointState()});
-            }, 1);
+            });
 
             return this;
         }
@@ -577,11 +711,14 @@
             }
         };
 
-        BrowserUtils.prototype.fadeInElement = function (element, duration, delay, callback) {
+        BrowserUtils.prototype.fadeInElement = function (params) {
             var _this = this;
-            duration = duration || 300;
-            delay = delay || 0;
-            this.setStylesOfElement(element, {
+            var duration = params.duration || 400;
+            var delay = params.delay || 0;
+            var callback = params.callback || function () {
+                    // empty function
+                };
+            this.setStylesOfElement(params.element, {
                 opacity: 0,
                 display: 'block',
                 'transition-property': 'opacity',
@@ -589,28 +726,31 @@
                 'transition-delay': delay + 'ms'
             });
             setTimeout(function () {
-                _this.setStylesOfElement(element, {
+                _this.setStylesOfElement(params.element, {
                     opacity: 1
                 });
-            }, 1);
+            }, 10);
             setTimeout(function () {
-                !!callback ? callback() : '';
+                callback();
             }, duration + delay);
         };
 
-        BrowserUtils.prototype.fadeOutElement = function (element, duration, delay, callback) {
+        BrowserUtils.prototype.fadeOutElement = function (params) {
             var _this = this;
-            duration = duration || 300;
-            delay = delay || 0;
-            this.setStylesOfElement(element, {
+            var duration = params.duration || 400;
+            var delay = params.delay || 0;
+            var callback = params.callback || function () {
+                    // empty function
+                };
+            this.setStylesOfElement(params.element, {
                 opacity: 0,
                 'transition-property': 'opacity',
                 'transition-duration': duration + 'ms',
                 'transition-delay': delay + 'ms'
             });
             setTimeout(function () {
-                _this.setStylesOfElement(element, {display: 'none'});
-                !!callback ? callback() : '';
+                _this.setStylesOfElement(params.element, {display: 'none'});
+                callback();
             }, duration + delay);
         };
 
@@ -621,12 +761,13 @@
             }
             if (classSet) { // toggleClass should replace class from classSet
                 var replacedClass = false;
-                classSet.forEach(function (value, index, array) {
-                    if (_this.hasClass(element, value)) {
-                        _this.replaceClass(element, value, toggleClass);
-                        replacedClass = true
+                for (var i = 0, l = classSet.length; i < l; i++) {
+                    if (_this.hasClass(element, classSet[i])) {
+                        _this.replaceClass(element, classSet[i], toggleClass);
+                        replacedClass = true;
+                        break;
                     }
-                });
+                }
                 if (!replacedClass) { // in case classSet is set and 'toggleClass()' is invoked for first time
                     this.addClass(element, toggleClass);
                 }
@@ -706,6 +847,7 @@
         }
 
         function tick() {
+            console.log('tick');
             for (var task in tasks) {
                 tasks[task](++tickerCount);
             }
@@ -794,14 +936,17 @@
 
         function getSceneById(id) {
             var scene = {};
-            config.scenes.forEach(function(value, index, array) {
-                scene = value.id === id ? value : '';
-            });
+            for (var i = 0, l = config.scenes.length; i < l; i++) {
+                if (config.scenes[i] === id) {
+                    scene = config.scenes[i];
+                    break;
+                }
+            }
             return scene;
         }
 
         function addEventListener(eventName, callback) {
-            console.log('addEventListener :: eventName = ', eventName);
+            // console.log('addEventListener :: eventName = ', eventName);
             emitter.addEventListener(ns + eventName, function (event) {
                 callback(event, event.detail);
             }, false);
@@ -838,7 +983,7 @@
     Helpers.domReady(function () {
         Helpers.sanitizeConfig(window[configSlug]);
         PosterInstance.getInstance().posterReady(function () {
-            ApplicationInstance.getInstance().start();
+            ApplicationInstance.getInstance();
         });
     });
 

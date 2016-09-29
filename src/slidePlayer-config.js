@@ -27,41 +27,31 @@ window.spConfig = {
     },
     scenes: [
         {
-            id: 'intro',
+            id: 'origin',
             poster: 'https://a2ua.com/blurry/blurry-005.jpg',
-            enter: {
-                start: '00:05:000',
-                end: '00:14:000'
-            },
-            exit: {
-                start: '00:10:000',
-                end: '00:12:000'
-            },
             hotSpots: [
                 {
-                    id: 'test-1',
-                    action: '#test',
-                    width: '10%',
-                    height: '10%',
+                    id: 'origin-1',
+                    action: 'scene1',
+                    width: '40%',
+                    height: '40%',
                     positionX: '5%',
                     positionY: '5%',
                     customClass: 'custom-class',
-                    container: {
-                        width: '15%',
-                        height: '15%',
-                        positionX: '5%',
-                        positionY: '5%'
+                    timeRange: {
+                        start: '00:00:000',
+                        end: '00:02:000'
                     }
                 },
                 {
-                    id: 'test-2',
+                    id: 'origin-2',
                     action: '.test',
-                    width: '10%',
-                    height: '10%',
+                    width: '35%',
+                    height: '45%',
                     positionX: '80%',
                     positionY: '20%',
                     label: 'This is a label',
-                    container: {
+                    overlay: {
                         width: '20%',
                         height: '20%',
                         positionX: '20%',
@@ -69,18 +59,43 @@ window.spConfig = {
                     }
                 },
                 {
-                    id: 'test-3',
-                    action: 'nextStep',
-                    width: '10%',
-                    height: '10%',
+                    id: 'origin-3',
+                    action: '#nextStep',
+                    width: '20%',
+                    height: '30%',
                     positionX: '50%',
-                    positionY: '50%'
+                    positionY: '50%',
+                    overlay: {
+                        width: '20%',
+                        height: '20%',
+                        positionX: '70%',
+                        positionY: '10%'
+                    }
                 }
             ]
         },
         {
             id: 'scene1',
-            poster: 'https://a2ua.com/blurry/blurry-004.jpg'
+            poster: 'https://a2ua.com/blurry/blurry-004.jpg',
+            enter: {
+                start: '00:00:000',
+                end: '00:02:000'
+            },
+            exit: {
+                start: '00:02:100',
+                end: '00:04:000'
+            },
+            hotSpots: [
+                {
+                    id: 'back',
+                    action: 'origin',
+                    width: '40%',
+                    height: '7%',
+                    positionX: '5%',
+                    positionY: '5%',
+                    label: 'back'
+                }
+            ]
         },
         {
             id: 'scene2',
