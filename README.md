@@ -1,3 +1,5 @@
-##slide-player project
+#slide-player
+A configurable interactive Video-Player.
 
-configurable interactive video player. 
+###Server Setup
+https://developer.mozilla.org/en/docs/Web/HTML/Element/video#Server_support

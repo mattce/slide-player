@@ -31,26 +31,22 @@ window.spConfig = {
             poster: 'https://a2ua.com/blurry/blurry-005.jpg',
             hotSpots: [
                 {
-                    id: 'origin-1',
                     action: 'scene1',
                     width: '40%',
                     height: '40%',
                     positionX: '5%',
                     positionY: '5%',
-                    customClass: 'custom-class',
                     timeRange: {
-                        start: '00:00:000',
-                        end: '00:02:000'
+                        start: '00:08:000',
+                        end: '00:12:000'
                     }
                 },
                 {
-                    id: 'origin-2',
                     action: '.test',
                     width: '35%',
                     height: '45%',
                     positionX: '80%',
                     positionY: '20%',
-                    label: 'This is a label',
                     overlay: {
                         width: '20%',
                         height: '20%',
@@ -59,8 +55,7 @@ window.spConfig = {
                     }
                 },
                 {
-                    id: 'origin-3',
-                    action: '#nextStep',
+                    action: '#test',
                     width: '20%',
                     height: '30%',
                     positionX: '50%',
@@ -87,13 +82,16 @@ window.spConfig = {
             },
             hotSpots: [
                 {
-                    id: 'back',
                     action: 'origin',
                     width: '40%',
                     height: '7%',
                     positionX: '5%',
                     positionY: '5%',
-                    label: 'back'
+                    label: 'back',
+                    timeRange: {
+                        start: '00:19:000',
+                        end: '00:22:000'
+                    }
                 }
             ]
         },
