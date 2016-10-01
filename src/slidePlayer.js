@@ -1,6 +1,6 @@
 ;(function (window, document) {
 
-    var version = '0.0.8';
+    var version = '1.0.0';
 
     var _g = {
         configSlug: 'spConfig',
@@ -60,6 +60,8 @@
 
             Helpers.dispatchCustomEvent('application/ready');
             Helpers.dispatchCustomEvent('poster/show');
+
+            this.BrowserUtils.addClass(this.root, (window[_g.configSlug].debug ? 'debug' : ''));
 
             return this;
         }
@@ -637,7 +639,7 @@
             if (!(_g.lastScene)) {
                 return false;
             }
-            var element = (hideCurrentPoster && _g.lastScene !== null) ?  this.currentPoster : this.getPosterFromId(_g.lastScene.id);
+            var element = (hideCurrentPoster && _g.lastScene !== null) ? this.currentPoster : this.getPosterFromId(_g.lastScene.id);
             this.BrowserUtils.fadeOutElement({
                 element: element,
                 callback: function () {
@@ -1055,21 +1057,6 @@
     })();
 
 
-    // SANITIZER
-
-    var Sanitizer = (function () {
-
-        function preFlightCheck() {
-            var config = window[_g.configSlug];
-            return true;
-        }
-
-        return {
-            preFlightCheck: preFlightCheck
-        }
-
-    })();
-
     // LOGGER
 
     var Logger = (function () {
@@ -1097,14 +1084,14 @@
             warn: warn,
             error: error
         }
+
     })();
 
     Helpers.domReady(function () {
-        if (Sanitizer.preFlightCheck(window[_g.configSlug])) {
-            PosterInstance.getInstance().posterReady(function () {
-                ApplicationInstance.getInstance();
-            });
-        }
+        Helpers.sanitizeConfig(window[_g.configSlug]);
+        PosterInstance.getInstance().posterReady(function () {
+            ApplicationInstance.getInstance();
+        });
     });
 
 })(window, document);
